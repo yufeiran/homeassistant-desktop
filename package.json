@@ -2,51 +2,25 @@
   "name": "homeassistant-desktop",
   "repository": {
     "type": "git",
-    "url": "https://github.com/iprodanovbg/homeassistant-desktop"
+    "url": "https://github.com/yufeiran/homeassistant-desktop"
   },
-  "version": "1.5.3",
-  "description": "Desktop App (Windows / macOS / Linux) for Home Assistant built with Electron",
+  "version": "1.8.0",
+  "description": "Home Assistant desktop client using the operating system webview",
   "author": "Ivan Prodanov",
   "license": "Apache-2.0",
-  "main": "app.js",
   "scripts": {
-    "start": "electron app.js",
-    "build-local-mac": "electron-builder build --mac --x64 --publish never",
-    "build-local-mac-arm": "electron-builder build --mac --arm64 --publish never",
-    "build-local-linux": "electron-builder build --linux appimage --x64 --publish never",
-    "build-local-linux-arm": "electron-builder build --linux rpm --arm64 --publish never",
-    "build-local-win": "electron-builder build --win --x64 --publish never",
-    "build-local-win-arm": "electron-builder build --win --arm64 --publish never",
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "dependencies": {
-    "auto-launch": "^5.0.5",
-    "bonjour-service": "^1.0.14",
-    "electron-log": "^4.4.8",
-    "electron-store": "^8.1.0",
-    "electron-traywindow-positioner": "^1.1.1",
-    "electron-updater": "^4.6.5"
+    "start": "tauri dev",
+    "build": "tauri build",
+    "build-local-mac": "tauri build --target x86_64-apple-darwin",
+    "build-local-mac-arm": "tauri build --target aarch64-apple-darwin",
+    "build-local-linux": "tauri build --bundles appimage,deb",
+    "build-local-win": "tauri build --bundles nsis",
+    "test": "node --test tests/*.test.mjs"
   },
   "devDependencies": {
-    "electron": "21.2.0",
-    "electron-builder": "^23.0.0"
+    "@tauri-apps/cli": "^2.11.4"
   },
   "engines": {
-    "node": ">= 16"
-  },
-  "build": {
-    "appId": "com.electron.homeassistant-desktop",
-    "artifactName": "${productName}-v${version}-${os}-${arch}.${ext}",
-    "productName": "Home Assistant Desktop",
-    "mac": {
-      "category": "public.app-category.productivity",
-      "target": [
-        "zip",
-        "dmg"
-      ],
-      "extendInfo": {
-        "LSUIElement": true
-      }
-    }
+    "node": ">= 20"
   }
 }

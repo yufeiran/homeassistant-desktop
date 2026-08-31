@@ -1,0 +1,34 @@
+[package]
+name = "homeassistant-desktop"
+version = "1.8.0"
+description = "Home Assistant desktop client using the operating system webview"
+authors = ["Ivan Prodanov", "Home Assistant Desktop contributors"]
+license = "Apache-2.0"
+repository = "https://github.com/yufeiran/homeassistant-desktop"
+edition = "2021"
+rust-version = "1.77.2"
+
+[lib]
+name = "homeassistant_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.5.6", features = [] }
+
+[dependencies]
+anyhow = "1.0"
+dirs = "6.0"
+mdns-sd = "0.15"
+open = "5.3"
+parking_lot = "0.12"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tauri = { version = "2.11.5", features = ["tray-icon"] }
+tauri-plugin-autostart = "2.5.1"
+tauri-plugin-global-shortcut = "2.3.2"
+tokio = { version = "1.53", features = ["time"] }
+url = "2.5"
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.55"

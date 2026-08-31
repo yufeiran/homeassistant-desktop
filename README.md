@@ -1,46 +1,88 @@
-# Home Assistant - Desktop
+# Home Assistant Desktop
 
-Desktop App (Windows / macOS / Linux) for [Home Assistant](https://www.home-assistant.io/) built with [Electron](https://www.electronjs.org)
+A small tray client for [Home Assistant](https://www.home-assistant.io/) that uses each operating system's maintained WebView instead of bundling a frozen copy of Chromium.
 
-![Home Assistant - Desktop](https://raw.githubusercontent.com/iprodanovbg/homeassistant-desktop/master/media/screenshot.png)
+![Home Assistant Desktop](https://raw.githubusercontent.com/iprodanovbg/homeassistant-desktop/master/media/screenshot.png)
 
-This project is fork from [mrvnklm/homeassistant-desktop](https://github.com/mrvnklm/)
+This branch is a Tauri 2 migration of Ivan Prodanov's Electron client, which was itself forked from [mrvnklm/homeassistant-desktop](https://github.com/mrvnklm/homeassistant-desktop).
 
-## Installation
+## System WebViews
 
-Just download the latest version for your platform from the [release section](https://github.com/iprodanovbg/homeassistant-desktop/releases/latest) to install Home Assistant
+| Platform | WebView | Runtime handling |
+| --- | --- | --- |
+| Windows | Microsoft Edge WebView2 | The NSIS installer checks for the Evergreen Runtime and offers Microsoft's bootstrapper if it is missing. |
+| macOS | WKWebView | Included in macOS and updated with the operating system. |
+| Linux | WebKitGTK 4.1 | Installed and updated by the distribution package manager; DEB packages declare the runtime dependency. |
 
-## Usage / Features
+The setup screen displays the detected runtime. The Home Assistant server is not modified by this application.
 
-- hover / click the tray icon to open the app
-- supports multiple instances of Home Assistant (including automatic switching)
-- automatic instance discovery using bonjour
-- right-click context menu for settings / reset / quit the app
-- global keyboard shortcut (Cmd/Ctrl + Alt + X) can be enabled to show / hide Home Assistant
-- fullscreen mode (Cmd/Ctrl + Alt + Return)
-- automatic updates (if not disabled in context menu)
+## Release architectures
 
-## Notes
+Each GitHub Release provides native 64-bit packages for the following systems:
 
-- if using "detached window" on Windows, instead of dragging, you have to resize it to move it
+| Platform | Architectures | Package |
+| --- | --- | --- |
+| Windows | x64, ARM64 | NSIS installer (`.exe`) |
+| macOS | Intel x64, Apple Silicon ARM64 | Disk image (`.dmg`) |
+| Linux | x64, ARM64 | Debian package (`.deb`) and AppImage |
 
-## Contributing
+The packages are built on native GitHub-hosted runners for their target architecture. Legacy 32-bit x86 packages are not produced.
 
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
+## Features
 
-## License and Author
+- Hover or click the tray icon to show Home Assistant
+- Multiple instances, mDNS discovery, health checks, and automatic switching
+- Detached window, always-on-top, full-screen, and saved window layout
+- Optional start-at-login and global show/hide shortcut (`Cmd/Ctrl + Alt + X`)
+- Full-screen shortcut (`Cmd/Ctrl + Alt + Enter`)
+- Existing Electron settings are read from the same `homeassistant-desktop/config.json` path
 
-Copyright 2022, [Ivan Prodanov](https://github.com/iprodanovbg)\
-Copyright 2020-2021, [Marvin Kelm](https://github.com/mrvnklm)
+Remote Home Assistant pages do not receive Tauri IPC permission. New-window links open in the default browser.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
+## Install
 
-    https://www.apache.org/licenses/LICENSE-2.0
+Download the installer for your platform from the GitHub Actions artifacts or build it locally.
 
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+On Windows, run the NSIS installer. It installs per user and checks for the Microsoft Edge WebView2 Evergreen Runtime. If WebView2 is missing, the installer offers Microsoft's official bootstrapper. The locally built packages are not code-signed, so Windows may display an unknown-publisher warning.
+
+Existing 1.x settings are preserved. Version 1.8.0 reads the same configuration file, migrates the start-at-login command to the new executable, and removes the obsolete Electron installation during the normal upgrade.
+
+## System WebView migration
+
+Version 1.8.0 replaces Electron 21 and its bundled Chromium 106 engine with Tauri 2 and the maintained system WebView:
+
+- Windows now uses the installed Microsoft Edge WebView2 Evergreen Runtime.
+- macOS now uses the operating system's WKWebView.
+- Linux now uses WebKitGTK 4.1 and declares the required Debian package dependencies.
+- The tray workflow, multiple Home Assistant instances, mDNS discovery, health checks, automatic switching, window modes, shortcuts, and start-at-login behavior remain available.
+- Remote Home Assistant content is isolated from Tauri IPC capabilities.
+- GitHub Actions now tests and builds Windows, macOS, and Linux packages.
+- The legacy Electron updater is disabled until signed Tauri update artifacts are configured.
+
+See [CHANGELOG.md](CHANGELOG.md) for the complete release notes.
+
+## Build
+
+Prerequisites are Node.js 20+, Rust, and the [Tauri platform prerequisites](https://v2.tauri.app/start/prerequisites/).
+
+```sh
+npm install
+npm test
+cargo test --manifest-path src-tauri/Cargo.toml
+npm run build
+```
+
+On Debian/Ubuntu, install the build dependencies first:
+
+```sh
+sudo apt-get install libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
+```
+
+The generated installers are under `src-tauri/target/release/bundle/`. Automatic updating is intentionally disabled until the fork owner configures and signs a Tauri update feed; the archived Electron update server is not reused.
+
+## License and authors
+
+- Copyright 2022 Ivan Prodanov
+- Copyright 2020-2021 Marvin Kelm
+
+Licensed under the Apache License, Version 2.0. See [LICENSE.md](LICENSE.md).
