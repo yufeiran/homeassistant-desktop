@@ -14,14 +14,23 @@ use tauri::{
     WebviewWindowBuilder, WindowEvent,
 };
 use tauri_plugin_autostart::ManagerExt as AutostartExt;
-use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
-const SHORTCUT: &str = "CommandOrControl+Alt+X";
+const SHORTCUT: &str = "Control+Alt+X";
+#[cfg(target_os = "macos")]
+const LEGACY_MACOS_SHORTCUT: &str = "Command+Alt+X";
 const FULLSCREEN_SHORTCUT: &str = "CommandOrControl+Alt+Enter";
 const GITHUB_URL: &str = "https://github.com/iprodanovbg/homeassistant-desktop";
 const AVAILABILITY_CHECK_INTERVAL: Duration = Duration::from_secs(10);
 const AVAILABILITY_REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
 const FAILURES_BEFORE_ERROR_PAGE: u8 = 6;
+const DEFAULT_WINDOW_WIDTH: u32 = 420;
+const DEFAULT_WINDOW_HEIGHT: u32 = 460;
+const MAX_SAVED_WINDOW_DIMENSION: u32 = 4096;
+
+#[cfg(target_os = "macos")]
+const MACOS_TRAY_ICON: tauri::image::Image<'_> =
+    tauri::include_image!("../assets/IconTemplate@2x.png");
 
 #[cfg(target_os = "windows")]
 const WINDOWS_BROWSER_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --disable-background-timer-throttling";
@@ -78,7 +87,26 @@ impl Settings {
         self.all_instances.retain(|item| seen.insert(item.clone()));
         self.current_instance =
             current.and_then(|address| self.all_instances.iter().position(|item| item == &address));
+
+        if self
+            .window_size
+            .is_some_and(|size| !valid_window_size(size))
+        {
+            self.window_size = None;
+        }
+        if self
+            .window_size_detached
+            .is_some_and(|size| !valid_window_size(size))
+        {
+            self.window_size_detached = None;
+            self.window_position = None;
+        }
     }
+}
+
+fn valid_window_size([width, height]: [u32; 2]) -> bool {
+    (DEFAULT_WINDOW_WIDTH..=MAX_SAVED_WINDOW_DIMENSION).contains(&width)
+        && (DEFAULT_WINDOW_HEIGHT..=MAX_SAVED_WINDOW_DIMENSION).contains(&height)
 }
 
 struct AppState {
@@ -182,7 +210,7 @@ fn toggle_window(app: &AppHandle) {
 
 fn apply_window_settings(window: &WebviewWindow, settings: &Settings) {
     let detached = settings.detached_mode;
-    let _ = window.set_decorations(detached && !cfg!(target_os = "macos"));
+    let _ = window.set_decorations(detached);
     let _ = window.set_skip_taskbar(!detached);
     let _ = window.set_always_on_top(settings.stay_on_top || settings.full_screen);
     let _ = window.set_fullscreen(settings.full_screen);
@@ -205,11 +233,32 @@ fn apply_window_settings(window: &WebviewWindow, settings: &Settings) {
 fn set_shortcuts(app: &AppHandle, enabled: bool) {
     let manager = app.global_shortcut();
     let _ = manager.unregister(SHORTCUT);
+    #[cfg(target_os = "macos")]
+    let _ = manager.unregister(LEGACY_MACOS_SHORTCUT);
     let _ = manager.unregister(FULLSCREEN_SHORTCUT);
     if enabled {
         let _ = manager.register(SHORTCUT);
+        #[cfg(target_os = "macos")]
+        let _ = manager.register(LEGACY_MACOS_SHORTCUT);
     }
     let _ = manager.register(FULLSCREEN_SHORTCUT);
+}
+
+fn shortcut_matches(shortcut: &Shortcut, configured: &str) -> bool {
+    configured
+        .parse::<Shortcut>()
+        .is_ok_and(|expected| expected == *shortcut)
+}
+
+fn is_show_hide_shortcut(shortcut: &Shortcut) -> bool {
+    if shortcut_matches(shortcut, SHORTCUT) {
+        return true;
+    }
+    #[cfg(target_os = "macos")]
+    if shortcut_matches(shortcut, LEGACY_MACOS_SHORTCUT) {
+        return true;
+    }
+    false
 }
 
 fn checked_item(
@@ -420,7 +469,10 @@ fn handle_menu(app: &AppHandle, id: &str) {
             let _ = save_settings(&state);
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_fullscreen(false);
-                let _ = window.set_size(LogicalSize::new(420_u32, 460_u32));
+                let _ = window.set_size(LogicalSize::new(
+                    DEFAULT_WINDOW_WIDTH,
+                    DEFAULT_WINDOW_HEIGHT,
+                ));
                 let _ = window.center();
                 apply_window_settings(&window, &state.settings.lock());
             }
@@ -432,13 +484,14 @@ fn handle_menu(app: &AppHandle, id: &str) {
     }
 }
 
-fn create_window(app: &AppHandle) -> tauri::Result<WebviewWindow> {
+fn create_window(app: &AppHandle, settings: &Settings) -> tauri::Result<WebviewWindow> {
     let builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
         .title("Home Assistant")
-        .inner_size(420.0, 460.0)
-        .min_inner_size(420.0, 460.0)
+        .inner_size(DEFAULT_WINDOW_WIDTH as f64, DEFAULT_WINDOW_HEIGHT as f64)
+        .min_inner_size(DEFAULT_WINDOW_WIDTH as f64, DEFAULT_WINDOW_HEIGHT as f64)
         .visible(false)
-        .skip_taskbar(true)
+        .decorations(settings.detached_mode)
+        .skip_taskbar(!settings.detached_mode)
         .resizable(true)
         .on_new_window(|url, _features| {
             let _ = open::that_detached(url.as_str());
@@ -456,6 +509,7 @@ fn create_window(app: &AppHandle) -> tauri::Result<WebviewWindow> {
 
 fn setup_window_events(window: &WebviewWindow) {
     let app = window.app_handle().clone();
+    let event_window = window.clone();
     window.on_window_event(move |event| {
         let state = app.state::<AppState>();
         match event {
@@ -478,6 +532,8 @@ fn setup_window_events(window: &WebviewWindow) {
                 if settings.full_screen {
                     return;
                 }
+                let scale = event_window.scale_factor().unwrap_or(1.0);
+                let size = size.to_logical::<u32>(scale);
                 let value = Some([size.width, size.height]);
                 if settings.detached_mode {
                     settings.window_size_detached = value;
@@ -490,6 +546,8 @@ fn setup_window_events(window: &WebviewWindow) {
             WindowEvent::Moved(position) => {
                 let mut settings = state.settings.lock();
                 if settings.detached_mode {
+                    let scale = event_window.scale_factor().unwrap_or(1.0);
+                    let position = position.to_logical::<i32>(scale);
                     settings.window_position = Some([position.x, position.y]);
                     drop(settings);
                     let _ = save_settings(&state);
@@ -545,6 +603,11 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
                 _ => {}
             }
         });
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder.icon(MACOS_TRAY_ICON).icon_as_template(true);
+    }
+    #[cfg(not(target_os = "macos"))]
     if let Some(icon) = app.default_window_icon() {
         builder = builder.icon(icon.clone());
     }
@@ -813,10 +876,9 @@ pub fn run() {
                     if event.state() != ShortcutState::Pressed {
                         return;
                     }
-                    let text = shortcut.to_string();
-                    if text.eq_ignore_ascii_case(SHORTCUT) {
+                    if is_show_hide_shortcut(shortcut) {
                         toggle_window(app);
-                    } else if text.eq_ignore_ascii_case(FULLSCREEN_SHORTCUT) {
+                    } else if shortcut_matches(shortcut, FULLSCREEN_SHORTCUT) {
                         toggle_setting(app, "fullscreen");
                     }
                 })
@@ -837,7 +899,7 @@ pub fn run() {
                 config_path: path,
                 settings: Mutex::new(settings.clone()),
             });
-            let window = create_window(app.handle())?;
+            let window = create_window(app.handle(), &settings)?;
             apply_window_settings(&window, &settings);
             setup_window_events(&window);
             setup_tray(app.handle())?;
@@ -897,6 +959,45 @@ mod tests {
         settings.normalize();
         assert_eq!(settings.current_url(), Some("http://two.local:8123/"));
         assert_eq!(settings.all_instances.len(), 2);
+    }
+
+    #[test]
+    fn discards_corrupted_saved_window_layout() {
+        let mut settings = Settings {
+            detached_mode: true,
+            window_position: Some([1624, 2808]),
+            window_size_detached: Some([8128, 5112]),
+            ..Settings::default()
+        };
+
+        settings.normalize();
+
+        assert_eq!(settings.window_size_detached, None);
+        assert_eq!(settings.window_position, None);
+    }
+
+    #[test]
+    fn keeps_reasonable_saved_window_layout() {
+        let mut settings = Settings {
+            detached_mode: true,
+            window_position: Some([100, 120]),
+            window_size_detached: Some([1200, 900]),
+            ..Settings::default()
+        };
+
+        settings.normalize();
+
+        assert_eq!(settings.window_size_detached, Some([1200, 900]));
+        assert_eq!(settings.window_position, Some([100, 120]));
+    }
+
+    #[test]
+    fn matches_shortcuts_after_platform_normalization() {
+        let show_hide = SHORTCUT.parse::<Shortcut>().unwrap();
+        let fullscreen = FULLSCREEN_SHORTCUT.parse::<Shortcut>().unwrap();
+
+        assert!(is_show_hide_shortcut(&show_hide));
+        assert!(shortcut_matches(&fullscreen, FULLSCREEN_SHORTCUT));
     }
 
     #[test]

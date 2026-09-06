@@ -2,6 +2,16 @@
 
 All notable changes to this fork are documented in this file.
 
+## Unreleased
+
+### Fixed
+
+- Restored native macOS window controls in detached mode and fixed Retina window
+  size and position persistence.
+- Switched the macOS menu bar icon to the transparent monochrome template asset.
+- Made `Control+Alt+X` the macOS show/hide shortcut, retained
+  `Command+Alt+X` compatibility, and fixed normalized shortcut matching.
+
 ## 1.8.1 - 2026-09-06
 
 ### Fixed
