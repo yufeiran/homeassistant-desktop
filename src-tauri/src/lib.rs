@@ -19,6 +19,12 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 const SHORTCUT: &str = "CommandOrControl+Alt+X";
 const FULLSCREEN_SHORTCUT: &str = "CommandOrControl+Alt+Enter";
 const GITHUB_URL: &str = "https://github.com/iprodanovbg/homeassistant-desktop";
+const AVAILABILITY_CHECK_INTERVAL: Duration = Duration::from_secs(10);
+const AVAILABILITY_REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
+const FAILURES_BEFORE_ERROR_PAGE: u8 = 6;
+
+#[cfg(target_os = "windows")]
+const WINDOWS_BROWSER_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --disable-background-timer-throttling";
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -427,7 +433,7 @@ fn handle_menu(app: &AppHandle, id: &str) {
 }
 
 fn create_window(app: &AppHandle) -> tauri::Result<WebviewWindow> {
-    WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+    let builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
         .title("Home Assistant")
         .inner_size(420.0, 460.0)
         .min_inner_size(420.0, 460.0)
@@ -437,8 +443,15 @@ fn create_window(app: &AppHandle) -> tauri::Result<WebviewWindow> {
         .on_new_window(|url, _features| {
             let _ = open::that_detached(url.as_str());
             tauri::webview::NewWindowResponse::Deny
-        })
-        .build()
+        });
+
+    // Home Assistant maintains its WebSocket with browser timers. WebView2 normally
+    // throttles those timers while this tray window is hidden, which can make a
+    // healthy instance look disconnected when the window is opened again.
+    #[cfg(target_os = "windows")]
+    let builder = builder.additional_browser_args(WINDOWS_BROWSER_ARGS);
+
+    builder.build()
 }
 
 fn setup_window_events(window: &WebviewWindow) {
@@ -539,17 +552,19 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
-async fn instance_available(address: &str) -> bool {
+fn availability_client() -> Result<reqwest::Client, reqwest::Error> {
+    reqwest::Client::builder()
+        .timeout(AVAILABILITY_REQUEST_TIMEOUT)
+        .tcp_keepalive(Duration::from_secs(30))
+        .pool_idle_timeout(Duration::from_secs(90))
+        .build()
+}
+
+async fn instance_available(client: &reqwest::Client, address: &str) -> bool {
     let Ok(url) = valid_ha_url(address) else {
         return false;
     };
     let Ok(endpoint) = url.join("/auth/providers") else {
-        return false;
-    };
-    let Ok(client) = reqwest::Client::builder()
-        .timeout(Duration::from_secs(4))
-        .build()
-    else {
         return false;
     };
     client
@@ -559,18 +574,25 @@ async fn instance_available(address: &str) -> bool {
         .is_ok_and(|response| response.status().is_success())
 }
 
+fn outage_is_confirmed(consecutive_failures: u8) -> bool {
+    consecutive_failures >= FAILURES_BEFORE_ERROR_PAGE
+}
+
 fn start_availability_monitor(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
+        let Ok(client) = availability_client() else {
+            return;
+        };
         let mut consecutive_failures = 0_u8;
         loop {
-            tokio::time::sleep(Duration::from_secs(10)).await;
+            tokio::time::sleep(AVAILABILITY_CHECK_INTERVAL).await;
             let settings = app.state::<AppState>().settings.lock().clone();
             let Some(current) = settings.current_url().map(str::to_owned) else {
                 consecutive_failures = 0;
                 continue;
             };
 
-            if instance_available(&current).await {
+            if instance_available(&client, &current).await {
                 consecutive_failures = 0;
                 if let Some(window) = app.get_webview_window("main") {
                     if window
@@ -584,14 +606,14 @@ fn start_availability_monitor(app: AppHandle) {
             }
 
             consecutive_failures = consecutive_failures.saturating_add(1);
-            if consecutive_failures < 2 {
+            if !outage_is_confirmed(consecutive_failures) {
                 continue;
             }
 
             let mut replacement = None;
             if settings.automatic_switching {
                 for (index, address) in settings.all_instances.iter().enumerate() {
-                    if address != &current && instance_available(address).await {
+                    if address != &current && instance_available(&client, address).await {
                         replacement = Some((index, address.clone()));
                         break;
                     }
@@ -671,10 +693,7 @@ async fn verify_instance(address: String) -> Result<(), String> {
     let endpoint = url
         .join("/auth/providers")
         .map_err(|error| error.to_string())?;
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(5))
-        .build()
-        .map_err(|error| error.to_string())?;
+    let client = availability_client().map_err(|error| error.to_string())?;
     let response = client
         .get(endpoint)
         .send()
@@ -885,5 +904,12 @@ mod tests {
         assert!(valid_ha_url("file:///etc/passwd").is_err());
         assert!(valid_ha_url("https://user:secret@example.test").is_err());
         assert!(valid_ha_url("http://homeassistant.local:8123").is_ok());
+    }
+
+    #[test]
+    fn ignores_transient_health_check_failures() {
+        assert!(!outage_is_confirmed(1));
+        assert!(!outage_is_confirmed(FAILURES_BEFORE_ERROR_PAGE - 1));
+        assert!(outage_is_confirmed(FAILURES_BEFORE_ERROR_PAGE));
     }
 }

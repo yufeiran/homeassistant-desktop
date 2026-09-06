@@ -16,9 +16,12 @@
       <line class="path line" fill="none" stroke="#D06079" stroke-width="6" stroke-linecap="round" x1="95.8" y1="38" x2="34.4" y2="92.2"/>
     </svg>
   </div>
-  <div class="center"><p class="error">Home Assistant is unavailable. Check the connection and try again.</p></div>
   <div class="center">
-    <button class="pure-material-button-contained" id="reconnect">Reconnect</button>
+    <p class="error">Home Assistant is unavailable. Automatic reconnect is active.</p>
+    <p>Keep this application running; it will return as soon as the instance responds.</p>
+  </div>
+  <div class="center">
+    <button class="pure-material-button-contained" id="reconnect">Reconnect now</button>
     <button class="pure-material-button-contained" id="restart" style="margin-left: 10px">Restart</button>
   </div>
 </div></div>

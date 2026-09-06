@@ -1,6 +1,6 @@
 [package]
 name = "homeassistant-desktop"
-version = "1.8.0"
+version = "1.8.1"
 description = "Home Assistant desktop client using the operating system webview"
 authors = ["Ivan Prodanov", "Home Assistant Desktop contributors"]
 license = "Apache-2.0"

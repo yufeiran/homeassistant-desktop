@@ -26,3 +26,14 @@ test('bundles declare each operating system WebView policy', async () => {
   ]);
   assert.equal(config.bundle.macOS.minimumSystemVersion, '11.0');
 });
+
+test('the native monitor keeps Home Assistant sessions alive and reconnects automatically', async () => {
+  const source = await read('src-tauri/src/lib.rs');
+  const errorPage = await read('web/error.html');
+
+  assert.match(source, /disable-background-timer-throttling/);
+  assert.match(source, /FAILURES_BEFORE_ERROR_PAGE: u8 = 6/);
+  assert.match(source, /instance_available\(&client, &current\)/);
+  assert.match(source, /url\.path\(\)\.ends_with\("error\.html"\)/);
+  assert.match(errorPage, /Automatic reconnect is active/);
+});

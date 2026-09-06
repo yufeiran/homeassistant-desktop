@@ -2,6 +2,15 @@
 
 All notable changes to this fork are documented in this file.
 
+## 1.8.1 - 2026-09-06
+
+### Fixed
+
+- Kept Home Assistant's WebSocket timers active while the Windows tray window is hidden.
+- Reused one native keep-alive HTTP client for availability checks instead of opening a new connection for every probe.
+- Ignored brief network errors and waited for six consecutive failed checks before showing the unavailable page.
+- Kept availability monitoring active on the error page and returned to Home Assistant automatically when the instance recovered.
+
 ## 1.8.0 - 2026-08-31
 
 ### Changed

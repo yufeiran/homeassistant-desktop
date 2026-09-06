@@ -47,6 +47,8 @@ On Windows, run the NSIS installer. It installs per user and checks for the Micr
 
 Existing 1.x settings are preserved. Version 1.8.0 reads the same configuration file, migrates the start-at-login command to the new executable, and removes the obsolete Electron installation during the normal upgrade.
 
+The client keeps Home Assistant's background connection timers active on Windows. Its independent native monitor tolerates short network interruptions and automatically reconnects after a confirmed outage, so the unavailable page does not require a manual reconnect when the server returns.
+
 ## System WebView migration
 
 Version 1.8.0 replaces Electron 21 and its bundled Chromium 106 engine with Tauri 2 and the maintained system WebView:
