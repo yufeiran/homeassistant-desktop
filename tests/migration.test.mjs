@@ -56,4 +56,7 @@ test('off-screen saved window layouts are recovered on startup', async () => {
   assert.match(source, /fn window_center_is_on_monitor/);
   assert.match(source, /window\.available_monitors\(\)/);
   assert.match(source, /ensure_window_on_screen\(&window\)/);
+  assert.match(source, /event_window\.is_minimized\(\)/);
+  assert.match(source, /if !valid_window_size\(value\)/);
+  assert.match(source, /state\.settings\.lock\(\)\.window_position = None/);
 });

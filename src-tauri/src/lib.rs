@@ -247,13 +247,13 @@ fn window_center_is_on_monitor(
         && (monitor_top..monitor_bottom).contains(&center_y)
 }
 
-fn ensure_window_on_screen(window: &WebviewWindow) {
+fn ensure_window_on_screen(window: &WebviewWindow) -> bool {
     let (Ok(window_position), Ok(window_size), Ok(monitors)) = (
         window.outer_position(),
         window.outer_size(),
         window.available_monitors(),
     ) else {
-        return;
+        return false;
     };
     if monitors.is_empty()
         || monitors.iter().any(|monitor| {
@@ -265,10 +265,10 @@ fn ensure_window_on_screen(window: &WebviewWindow) {
             )
         })
     {
-        return;
+        return false;
     }
 
-    let _ = window.center();
+    window.center().is_ok()
 }
 
 fn set_shortcuts(app: &AppHandle, enabled: bool) {
@@ -570,23 +570,26 @@ fn setup_window_events(window: &WebviewWindow) {
             }
             WindowEvent::Resized(size) => {
                 let mut settings = state.settings.lock();
-                if settings.full_screen {
+                if settings.full_screen || event_window.is_minimized().unwrap_or(false) {
                     return;
                 }
                 let scale = event_window.scale_factor().unwrap_or(1.0);
                 let size = size.to_logical::<u32>(scale);
-                let value = Some([size.width, size.height]);
+                let value = [size.width, size.height];
+                if !valid_window_size(value) {
+                    return;
+                }
                 if settings.detached_mode {
-                    settings.window_size_detached = value;
+                    settings.window_size_detached = Some(value);
                 } else {
-                    settings.window_size = value;
+                    settings.window_size = Some(value);
                 }
                 drop(settings);
                 let _ = save_settings(&state);
             }
             WindowEvent::Moved(position) => {
                 let mut settings = state.settings.lock();
-                if settings.detached_mode {
+                if settings.detached_mode && !event_window.is_minimized().unwrap_or(false) {
                     let scale = event_window.scale_factor().unwrap_or(1.0);
                     let position = position.to_logical::<i32>(scale);
                     settings.window_position = Some([position.x, position.y]);
@@ -940,10 +943,15 @@ pub fn run() {
                 config_path: path,
                 settings: Mutex::new(settings.clone()),
             });
+            let state = app.state::<AppState>();
+            let _ = save_settings(&state);
             let window = create_window(app.handle(), &settings)?;
             apply_window_settings(&window, &settings);
             setup_window_events(&window);
-            ensure_window_on_screen(&window);
+            if ensure_window_on_screen(&window) {
+                state.settings.lock().window_position = None;
+                let _ = save_settings(&state);
+            }
             setup_tray(app.handle())?;
             set_shortcuts(app.handle(), settings.shortcut_enabled);
             start_availability_monitor(app.handle().clone());

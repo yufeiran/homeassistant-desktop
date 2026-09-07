@@ -2,6 +2,14 @@
 
 All notable changes to this fork are documented in this file.
 
+## 1.8.4 - 2026-09-07
+
+### Fixed
+
+- Persisted repaired layouts, cleared off-screen saved positions, and stopped
+  Windows minimize events from saving sentinel coordinates or zero-sized
+  windows.
+
 ## 1.8.3 - 2026-09-07
 
 ### Fixed
