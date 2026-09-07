@@ -37,3 +37,15 @@ test('the native monitor keeps Home Assistant sessions alive and reconnects auto
   assert.match(source, /url\.path\(\)\.ends_with\("error\.html"\)/);
   assert.match(errorPage, /Automatic reconnect is active/);
 });
+
+test('Windows releases stay headless and shortcuts use normalized identities', async () => {
+  const entrypoint = await read('src-tauri/src/main.rs');
+  const source = await read('src-tauri/src/lib.rs');
+
+  assert.match(entrypoint, /not\(debug_assertions\)/);
+  assert.match(entrypoint, /target_os = "windows"/);
+  assert.match(entrypoint, /windows_subsystem = "windows"/);
+  assert.match(source, /const SHORTCUT: &str = "Control\+Alt\+X"/);
+  assert.match(source, /expected == \*shortcut/);
+  assert.match(source, /is_show_hide_shortcut\(shortcut\)/);
+});

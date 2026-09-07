@@ -2,15 +2,17 @@
 
 All notable changes to this fork are documented in this file.
 
-## Unreleased
+## 1.8.2 - 2026-09-07
 
 ### Fixed
 
 - Restored native macOS window controls in detached mode and fixed Retina window
   size and position persistence.
 - Switched the macOS menu bar icon to the transparent monochrome template asset.
-- Made `Control+Alt+X` the macOS show/hide shortcut, retained
-  `Command+Alt+X` compatibility, and fixed normalized shortcut matching.
+- Built Windows releases as GUI-subsystem applications so they no longer open
+  an empty console window.
+- Made `Control+Alt+X` the show/hide shortcut on all desktop platforms, retained
+  `Command+Alt+X` compatibility on macOS, and fixed normalized shortcut matching.
 
 ## 1.8.1 - 2026-09-06
 
