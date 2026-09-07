@@ -10,8 +10,8 @@ use std::{
 use tauri::{
     menu::{CheckMenuItem, MenuBuilder, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, LogicalPosition, LogicalSize, Manager, State, Url, WebviewUrl, WebviewWindow,
-    WebviewWindowBuilder, WindowEvent,
+    AppHandle, LogicalPosition, LogicalSize, Manager, PhysicalPosition, PhysicalSize, State, Url,
+    WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent,
 };
 use tauri_plugin_autostart::ManagerExt as AutostartExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
@@ -228,6 +228,47 @@ fn apply_window_settings(window: &WebviewWindow, settings: &Settings) {
             let _ = window.set_position(LogicalPosition::new(x, y));
         }
     }
+}
+
+fn window_center_is_on_monitor(
+    window_position: PhysicalPosition<i32>,
+    window_size: PhysicalSize<u32>,
+    monitor_position: PhysicalPosition<i32>,
+    monitor_size: PhysicalSize<u32>,
+) -> bool {
+    let center_x = i64::from(window_position.x) + i64::from(window_size.width) / 2;
+    let center_y = i64::from(window_position.y) + i64::from(window_size.height) / 2;
+    let monitor_left = i64::from(monitor_position.x);
+    let monitor_top = i64::from(monitor_position.y);
+    let monitor_right = monitor_left + i64::from(monitor_size.width);
+    let monitor_bottom = monitor_top + i64::from(monitor_size.height);
+
+    (monitor_left..monitor_right).contains(&center_x)
+        && (monitor_top..monitor_bottom).contains(&center_y)
+}
+
+fn ensure_window_on_screen(window: &WebviewWindow) {
+    let (Ok(window_position), Ok(window_size), Ok(monitors)) = (
+        window.outer_position(),
+        window.outer_size(),
+        window.available_monitors(),
+    ) else {
+        return;
+    };
+    if monitors.is_empty()
+        || monitors.iter().any(|monitor| {
+            window_center_is_on_monitor(
+                window_position,
+                window_size,
+                *monitor.position(),
+                *monitor.size(),
+            )
+        })
+    {
+        return;
+    }
+
+    let _ = window.center();
 }
 
 fn set_shortcuts(app: &AppHandle, enabled: bool) {
@@ -902,6 +943,7 @@ pub fn run() {
             let window = create_window(app.handle(), &settings)?;
             apply_window_settings(&window, &settings);
             setup_window_events(&window);
+            ensure_window_on_screen(&window);
             setup_tray(app.handle())?;
             set_shortcuts(app.handle(), settings.shortcut_enabled);
             start_availability_monitor(app.handle().clone());
@@ -989,6 +1031,32 @@ mod tests {
 
         assert_eq!(settings.window_size_detached, Some([1200, 900]));
         assert_eq!(settings.window_position, Some([100, 120]));
+    }
+
+    #[test]
+    fn detects_a_window_whose_center_is_outside_the_monitor() {
+        assert!(!window_center_is_on_monitor(
+            PhysicalPosition::new(4030, 2006),
+            PhysicalSize::new(3844, 2120),
+            PhysicalPosition::new(0, 0),
+            PhysicalSize::new(3840, 2160),
+        ));
+    }
+
+    #[test]
+    fn accepts_centered_and_negative_monitor_coordinates() {
+        assert!(window_center_is_on_monitor(
+            PhysicalPosition::new(-2, 20),
+            PhysicalSize::new(3844, 2120),
+            PhysicalPosition::new(0, 0),
+            PhysicalSize::new(3840, 2160),
+        ));
+        assert!(window_center_is_on_monitor(
+            PhysicalPosition::new(-1800, 100),
+            PhysicalSize::new(1200, 900),
+            PhysicalPosition::new(-1920, 0),
+            PhysicalSize::new(1920, 1080),
+        ));
     }
 
     #[test]

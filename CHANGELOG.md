@@ -2,6 +2,14 @@
 
 All notable changes to this fork are documented in this file.
 
+## 1.8.3 - 2026-09-07
+
+### Fixed
+
+- Recentered detached windows whose saved position resolves outside every
+  connected display, including Windows layouts saved as physical pixels before
+  the HiDPI coordinate fix.
+
 ## 1.8.2 - 2026-09-07
 
 ### Fixed

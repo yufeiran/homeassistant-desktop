@@ -49,3 +49,11 @@ test('Windows releases stay headless and shortcuts use normalized identities', a
   assert.match(source, /expected == \*shortcut/);
   assert.match(source, /is_show_hide_shortcut\(shortcut\)/);
 });
+
+test('off-screen saved window layouts are recovered on startup', async () => {
+  const source = await read('src-tauri/src/lib.rs');
+
+  assert.match(source, /fn window_center_is_on_monitor/);
+  assert.match(source, /window\.available_monitors\(\)/);
+  assert.match(source, /ensure_window_on_screen\(&window\)/);
+});

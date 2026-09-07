@@ -4,7 +4,7 @@
     "type": "git",
     "url": "https://github.com/yufeiran/homeassistant-desktop"
   },
-  "version": "1.8.2",
+  "version": "1.8.3",
   "description": "Home Assistant desktop client using the operating system webview",
   "author": "Ivan Prodanov",
   "license": "Apache-2.0",
