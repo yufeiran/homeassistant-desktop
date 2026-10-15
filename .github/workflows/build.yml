@@ -54,7 +54,12 @@ jobs:
       - run: npm exec tauri build -- --bundles ${{ matrix.bundle }}
       - name: Verify macOS application signature
         if: runner.os == 'macOS'
-        run: codesign --verify --deep --strict --verbose=2 "src-tauri/target/release/bundle/macos/Home Assistant Desktop.app"
+        run: |
+          image=$(find src-tauri/target/release/bundle/dmg -maxdepth 1 -name '*.dmg' -print -quit)
+          dmg_mount=$(mktemp -d)
+          hdiutil attach "$image" -nobrowse -readonly -mountpoint "$dmg_mount" >/dev/null
+          trap 'hdiutil detach "$dmg_mount" >/dev/null' EXIT
+          codesign --verify --deep --strict --verbose=2 "$dmg_mount/Home Assistant Desktop.app"
       - uses: actions/upload-artifact@v4
         if: startsWith(github.ref, 'refs/tags/v')
         with:
