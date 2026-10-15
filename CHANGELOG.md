@@ -2,6 +2,15 @@
 
 All notable changes to this fork are documented in this file.
 
+## 1.8.5 - 2026-10-15
+
+### Fixed
+
+- Restored HTML5 drag-and-drop in Home Assistant dashboard editors by disabling
+  Tauri's native file-drop interception, including Windows Lite card reordering.
+- Applied complete ad-hoc bundle signatures to macOS releases so the application
+  and its resources pass signature verification after installation.
+
 ## 1.8.4 - 2026-09-07
 
 ### Fixed

@@ -534,6 +534,9 @@ fn create_window(app: &AppHandle, settings: &Settings) -> tauri::Result<WebviewW
         .decorations(settings.detached_mode)
         .skip_taskbar(!settings.detached_mode)
         .resizable(true)
+        // Tauri's native file-drop handler intercepts WebView2's HTML5 drag
+        // events, which Home Assistant uses to reorder dashboard cards.
+        .disable_drag_drop_handler()
         .on_new_window(|url, _features| {
             let _ = open::that_detached(url.as_str());
             tauri::webview::NewWindowResponse::Deny
